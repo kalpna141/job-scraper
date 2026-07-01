@@ -5,7 +5,7 @@ let browser = null;
 async function getBrowser() {
   if (!browser || !browser.connected) {
     const launchOptions = {
-      headless: "new",
+      headless: true,
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",

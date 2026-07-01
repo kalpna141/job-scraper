@@ -21,19 +21,21 @@ async function scrape(role, location) {
           title: titleSpan?.getAttribute("title") || titleSpan?.innerText?.trim() || "",
           company: el.querySelector("[data-testid='company-name']")?.innerText?.trim() || "",
           location: el.querySelector("[data-testid='text-location']")?.innerText?.trim() || "",
+          salary: el.querySelector(".salary-snippet, [data-testid='attribute_snippet_testid'], .estimated-salary")?.innerText?.trim() || "",
           posted: el.querySelector(".date, [data-testid='myJobsStateDate']")?.innerText?.trim() || "",
           href: href.startsWith("http") ? href : `https://in.indeed.com${href}`,
         };
       });
     });
 
-    extracted.forEach(({ title, company, location: loc, posted, href }) => {
+    extracted.forEach(({ title, company, location: loc, salary, posted, href }) => {
       if (title && company) {
         jobs.push({
           title,
           company,
           experience: "Not specified",
           location: loc || location,
+          salary: salary || "Not Disclosed",
           source: "Indeed",
           postedDate: posted || "Recently",
           url: href || url,

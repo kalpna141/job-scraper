@@ -3,6 +3,7 @@ const SOURCE_COLORS = {
   Indeed: { bg: "#eef3ff", badge: "#2164f3" },
   Shine: { bg: "#eefaf3", badge: "#00a651" },
   TimesJobs: { bg: "#fff0f0", badge: "#e8312a" },
+  "Career Pages": { bg: "#f5f3ff", badge: "#7c3aed" },
 };
 
 export default function JobCard({ job }) {
@@ -24,9 +25,14 @@ export default function JobCard({ job }) {
         <span className="meta-item">
           <span className="meta-icon">📍</span> {job.location}
         </span>
-        {job.experience && job.experience !== "Not specified" && (
+        {job.experience && job.experience !== "Not specified" && job.experience !== "N/A" && (
           <span className="meta-item">
             <span className="meta-icon">💼</span> {job.experience}
+          </span>
+        )}
+        {job.salary && job.salary !== "Not Disclosed" && (
+          <span className="meta-item salary-tag">
+            <span className="meta-icon">💰</span> {job.salary}
           </span>
         )}
       </div>

@@ -1,12 +1,30 @@
-export default function Filters({ sources, activeSource, onSourceChange, expRange, onExpChange }) {
+export default function Filters({ sources, activeSource, onSourceChange, expRange, onExpChange, dateFilter, onDateFilterChange, salaryFilter, onSalaryFilterChange, jobsWithSalary, totalJobs }) {
   const sourceColors = {
     Naukri: "#ff7555",
     Indeed: "#2164f3",
     Shine: "#00a651",
     TimesJobs: "#e8312a",
-    "Company Career Page": "#7c3aed",
+    "Career Pages": "#7c3aed",
     all: "#6b7280",
   };
+
+  const SALARY_PRESETS = [
+    { label: "Any salary", value: null },
+    { label: "3+ LPA", value: 3 },
+    { label: "5+ LPA", value: 5 },
+    { label: "8+ LPA", value: 8 },
+    { label: "12+ LPA", value: 12 },
+    { label: "20+ LPA", value: 20 },
+  ];
+
+  const DATE_PRESETS = [
+    { label: "All time", value: null },
+    { label: "Today", value: 1 },
+    { label: "Last 3 days", value: 3 },
+    { label: "Last 7 days", value: 7 },
+    { label: "Last 15 days", value: 15 },
+    { label: "Last 30 days", value: 30 },
+  ];
 
   const EXP_PRESETS = [
     { label: "Any", min: 0, max: 20 },
@@ -41,6 +59,41 @@ export default function Filters({ sources, activeSource, onSourceChange, expRang
               {s === "all" ? "All Sources" : s}
             </button>
           ))}
+        </div>
+      </div>
+
+      <div className="filter-row">
+        <span className="filters-label">Posted:</span>
+        <div className="filter-chips">
+          {DATE_PRESETS.map((p) => (
+            <button
+              key={p.label}
+              className={`chip ${dateFilter === p.value ? "chip-active chip-date" : ""}`}
+              onClick={() => onDateFilterChange(p.value)}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="filter-row">
+        <span className="filters-label">Salary:</span>
+        <div className="filter-chips">
+          {SALARY_PRESETS.map((p) => (
+            <button
+              key={p.label}
+              className={`chip ${salaryFilter === p.value ? "chip-active chip-salary" : ""}`}
+              onClick={() => onSalaryFilterChange(p.value)}
+            >
+              {p.label}
+            </button>
+          ))}
+          {salaryFilter !== null && (
+            <span className="salary-note">
+              {jobsWithSalary} of {totalJobs} jobs disclose salary · rest always shown
+            </span>
+          )}
         </div>
       </div>
 

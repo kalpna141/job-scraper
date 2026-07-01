@@ -120,6 +120,10 @@ body {
 .chip:hover { border-color: #6b7280; }
 .chip-active { color: white !important; }
 .chip-exp.chip-active { background: #2563eb !important; border-color: #2563eb !important; }
+.chip-date.chip-active { background: #059669 !important; border-color: #059669 !important; }
+.chip-salary.chip-active { background: #d97706 !important; border-color: #d97706 !important; }
+.salary-tag { color: #059669; font-weight: 600; }
+.salary-note { font-size: 0.75rem; color: #9ca3af; align-self: center; white-space: nowrap; }
 
 /* Job grid */
 .job-grid {

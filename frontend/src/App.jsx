@@ -4,6 +4,8 @@ import SearchBar from "./components/SearchBar";
 import JobList from "./components/JobList";
 import Filters from "./components/Filters";
 import { matchesExperience, defaultExpRange } from "./utils/experience";
+import { matchesDateFilter } from "./utils/dateFilter";
+import { matchesSalary, hasSalaryData } from "./utils/salary";
 
 const ROLES = [
   "quality analyst",
@@ -31,20 +33,27 @@ export default function App() {
   const [selectedRole, setSelectedRole] = useState("all");
   const [selectedLocation, setSelectedLocation] = useState("all");
   const [expRange, setExpRange] = useState({ min: 0, max: 20 });
+  const [dateFilter, setDateFilter] = useState(null);
+  const [salaryFilter, setSalaryFilter] = useState(null);
 
   const filteredJobs = jobs.filter((j) => {
     const sourceOk = activeSource === "all" || j.source === activeSource;
     const expOk = matchesExperience(j.experience, expRange.min, expRange.max);
-    return sourceOk && expOk;
+    const dateOk = matchesDateFilter(j.postedDate, dateFilter);
+    const salaryOk = matchesSalary(j.salary, salaryFilter);
+    return sourceOk && expOk && dateOk && salaryOk;
   });
 
   const sources = ["all", ...new Set(jobs.map((j) => j.source))];
+  const jobsWithSalary = jobs.filter((j) => hasSalaryData(j.salary)).length;
 
   async function handleSearch(role, location) {
     setLoading(true);
     setError("");
     setSearched(true);
     setActiveSource("all");
+    setDateFilter(null);
+    setSalaryFilter(null);
     setSelectedRole(role);
     setSelectedLocation(location);
     // Auto-set experience range based on role
@@ -99,6 +108,12 @@ export default function App() {
                 onSourceChange={setActiveSource}
                 expRange={expRange}
                 onExpChange={setExpRange}
+                dateFilter={dateFilter}
+                onDateFilterChange={setDateFilter}
+                salaryFilter={salaryFilter}
+                onSalaryFilterChange={setSalaryFilter}
+                jobsWithSalary={jobsWithSalary}
+                totalJobs={jobs.length}
               />
             )}
           </div>

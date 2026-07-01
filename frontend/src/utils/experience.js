@@ -31,7 +31,8 @@ export function matchesExperience(expStr, wantMin, wantMax) {
 
 // Default experience range per role
 export function defaultExpRange(role) {
-  if (!role || role === "all") return { min: 0, max: 10 };
+  if (!role || role === "all") return { min: 0, max: 20 };
   if (role.includes("quality analyst")) return { min: 3, max: 5 };
+  // mern stack, react, nodejs, frontend, backend → 2-3 YOE
   return { min: 2, max: 3 };
 }

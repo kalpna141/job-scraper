@@ -23,25 +23,28 @@ async function scrape(role, location) {
         const expEl = el.querySelector("[class*=expRange], [class*=Exp]");
         const locEl = el.querySelector("[class*=location], [class*=Location]");
         const postedEl = el.querySelector("[class*=postedData]");
+        const salaryEl = el.querySelector("[class*=salary],[class*=Salary],[class*=ctc],[class*=CTC],[class*=package]");
         const href = el.querySelector("h3 a")?.href || el.querySelector("meta[itemprop='url']")?.content || "";
         return {
           title: titleEl?.getAttribute("title") || titleEl?.innerText?.trim() || "",
           company: companyEl?.getAttribute("title") || companyEl?.innerText?.trim() || "",
           experience: expEl?.innerText?.trim() || "",
           location: locEl?.innerText?.trim() || "",
+          salary: salaryEl?.innerText?.trim() || "",
           posted: postedEl?.innerText?.trim() || "",
           href,
         };
       });
     });
 
-    extracted.forEach(({ title, company, experience, location: loc, posted, href }) => {
+    extracted.forEach(({ title, company, experience, location: loc, salary, posted, href }) => {
       if (title && company) {
         jobs.push({
           title,
           company,
           experience: experience || "Not specified",
           location: loc || location,
+          salary: salary || "Not Disclosed",
           source: "Shine",
           postedDate: posted || "Recently",
           url: href || url,

@@ -27,18 +27,20 @@ async function scrape(role, location) {
         company: el.querySelector(".comp-name, .companyName")?.innerText?.trim() || "",
         experience: el.querySelector(".expwdth, .experience, .exp-wrap")?.innerText?.trim() || "",
         location: el.querySelector(".locWdth, .location, .loc")?.innerText?.trim() || "",
+        salary: el.querySelector(".sal-wrap, .salary, [class*='salary']")?.innerText?.trim() || "",
         posted: el.querySelector(".job-post-day, .freshness")?.innerText?.trim() || "",
         href: el.querySelector("a.title, a.jobTitle")?.href || "",
       }));
     });
 
-    extracted.forEach(({ title, company, experience, location: loc, posted, href }) => {
+    extracted.forEach(({ title, company, experience, location: loc, salary, posted, href }) => {
       if (title && company) {
         jobs.push({
           title,
           company,
           experience: experience || "Not specified",
           location: loc || location,
+          salary: salary || "Not Disclosed",
           source: "Naukri",
           postedDate: posted || "Recently",
           url: href || url,

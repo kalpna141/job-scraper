@@ -80,8 +80,9 @@ const COMPANIES = [
   {
     name: "TCS",
     ats: "custom",
-    careersUrl: "https://ibegin.tcs.com/iBegin/faces/login.xhtml",
-    searchUrl: "https://ibegin.tcs.com/iBegin/",
+    careersUrl: "https://careers.tcs.com/careers",
+    searchUrl: "https://careers.tcs.com/careers?jobQuery={role}",
+    selector: ".job-listing-item, .opportunity-listing, .card",
   },
   {
     name: "Google",
