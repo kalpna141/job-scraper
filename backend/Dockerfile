@@ -1,9 +1,9 @@
-FROM node:20-slim
+FROM node:20-alpine
 
 WORKDIR /app
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN node --max-old-space-size=256 $(which npm) install --omit=dev
 COPY . .
 
 EXPOSE 6000
-CMD ["node", "server.js"]
+CMD ["node", "--max-old-space-size=256", "server.js"]

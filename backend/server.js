@@ -18,6 +18,12 @@ process.on("uncaughtException", (err) => {
   console.error("[Server] Uncaught exception:", err);
 });
 
+function logMem(label) {
+  const m = process.memoryUsage();
+  console.log(`[Mem:${label}] rss=${Math.round(m.rss/1e6)}MB heap=${Math.round(m.heapUsed/1e6)}/${Math.round(m.heapTotal/1e6)}MB ext=${Math.round(m.external/1e6)}MB`);
+}
+logMem("startup");
+
 function deduplicateJobs(jobs) {
   const seen = new Set();
   return jobs.filter((job) => {
@@ -42,6 +48,7 @@ app.get("/api/jobs", async (req, res) => {
     console.log(
       `[Server] Searching: roles=${roles.join(", ")} | locations=${locations.join(", ")}`,
     );
+    logMem("before-scrape");
 
     const allResults = [];
 
@@ -61,6 +68,7 @@ app.get("/api/jobs", async (req, res) => {
       }
     }
 
+    logMem("after-scrape");
     const deduplicated = deduplicateJobs(allResults);
     console.log(`[Server] Found ${deduplicated.length} unique jobs`);
     res.json({ jobs: deduplicated, total: deduplicated.length });

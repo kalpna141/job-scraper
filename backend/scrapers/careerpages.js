@@ -114,12 +114,14 @@ async function scrapeCompany(company, role, location) {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
+const COMPANIES_TO_SEARCH = COMPANIES.slice(0, 30);
+
 async function scrape(role, location) {
-  console.log(`[CareerPages] Searching ${COMPANIES.length} companies for "${role}" in "${location}"`);
+  console.log(`[CareerPages] Searching ${COMPANIES_TO_SEARCH.length} companies for "${role}" in "${location}"`);
   const allJobs = [];
 
-  for (let i = 0; i < COMPANIES.length; i += BATCH_SIZE) {
-    const batch = COMPANIES.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < COMPANIES_TO_SEARCH.length; i += BATCH_SIZE) {
+    const batch = COMPANIES_TO_SEARCH.slice(i, i + BATCH_SIZE);
     const results = await Promise.allSettled(batch.map((c) => scrapeCompany(c, role, location)));
     results.forEach((r) => {
       if (r.status === "fulfilled") allJobs.push(...r.value);
