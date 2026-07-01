@@ -38,33 +38,41 @@ app.get("/api/jobs", async (req, res) => {
 
   const allResults = [];
 
+  // Run Puppeteer scrapers sequentially and close browser between each
+  // to stay within Render free tier 512MB memory limit
+  const puppeteerScrapers = [
+    { name: "Naukri", scraper: naukri },
+    { name: "Indeed", scraper: indeed },
+    { name: "Shine", scraper: shine },
+    { name: "TimesJobs", scraper: timesjobs },
+  ];
+
   for (const r of roles) {
     for (const l of locations) {
-      const [naukriJobs, indeedJobs, shineJobs, timesjobsJobs, careerJobs] =
-        await Promise.allSettled([
-          naukri.scrape(r, l),
-          indeed.scrape(r, l),
-          shine.scrape(r, l),
-          timesjobs.scrape(r, l),
-          careerpages.scrape(r, l),
-        ]);
+      for (const { name, scraper } of puppeteerScrapers) {
+        try {
+          const jobs = await scraper.scrape(r, l);
+          allResults.push(...jobs);
+          console.log(`[${name}] ${jobs.length} jobs found`);
+        } catch (err) {
+          console.error(`[${name}] failed:`, err.message);
+        } finally {
+          await closeBrowser(); // free Chrome memory after each site
+        }
+      }
 
-      [naukriJobs, indeedJobs, shineJobs, timesjobsJobs, careerJobs].forEach(
-        (result) => {
-          if (result.status === "fulfilled") {
-            allResults.push(...result.value);
-          }
-        },
-      );
+      // CareerPages uses HTTP APIs (no Chrome) — run normally
+      try {
+        const jobs = await careerpages.scrape(r, l);
+        allResults.push(...jobs);
+      } catch (err) {
+        console.error(`[CareerPages] failed:`, err.message);
+      }
     }
   }
 
   const deduplicated = deduplicateJobs(allResults);
   console.log(`[Server] Found ${deduplicated.length} unique jobs`);
-
-  // Free Chromium memory immediately after each request
-  await closeBrowser();
-
   res.json({ jobs: deduplicated, total: deduplicated.length });
 });
 
