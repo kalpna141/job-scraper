@@ -1,36 +1,32 @@
-const { newPage } = require("../browser");
+const axios = require("axios");
+const cheerio = require("cheerio");
+
+const HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+  "Accept-Encoding": "gzip, deflate, br",
+  "Referer": "https://www.google.com/",
+};
 
 async function scrape(role, location) {
   const jobs = [];
   const url = `https://www.timesjobs.com/candidate/job-search.html?searchType=personalizedSearch&from=submit&txtKeywords=${encodeURIComponent(role)}&txtLocation=${encodeURIComponent(location)}`;
-  let page;
 
   try {
-    page = await newPage();
-    await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
+    const { data } = await axios.get(url, { headers: HEADERS, timeout: 15000 });
+    const $ = cheerio.load(data);
 
-    // TimesJobs uses dynamic class names — wait for any list items with job content
-    await page.waitForFunction(
-      () => document.querySelectorAll("li.clearfix").length > 0,
-      { timeout: 10000 }
-    ).catch(() => {});
+    $("li.clearfix").filter((_, el) => $(el).find("h2").length > 0).each((_, el) => {
+      const $el = $(el);
+      const title = $el.find("h2 a").first().text().trim();
+      const company = $el.find(".joblist-comp-name, .comp-dtls-wrap strong").first().text().trim();
+      const experience = $el.find(".srp-skills, .job-skills").first().text().trim();
+      const loc = $el.find(".loc span").first().text().trim();
+      const salary = $el.find(".jd-salary, .ctc").first().text().trim();
+      const posted = $el.find(".sim-posted span").first().text().trim();
+      const href = $el.find("h2 a").first().attr("href") || url;
 
-    const extracted = await page.evaluate(() => {
-      const cards = document.querySelectorAll("li.clearfix");
-      return Array.from(cards)
-        .filter((el) => el.querySelector("h2"))
-        .map((el) => ({
-          title: el.querySelector("h2 a")?.innerText?.trim() || "",
-          company: el.querySelector(".joblist-comp-name, .comp-dtls-wrap strong")?.innerText?.trim() || "",
-          experience: el.querySelector(".srp-skills, .job-skills")?.innerText?.trim() || "",
-          location: el.querySelector(".srp-skills + ul li:nth-child(2), .loc span")?.innerText?.trim() || "",
-          salary: el.querySelector(".jd-salary, .ctc, [class*='salary']")?.innerText?.trim() || "",
-          posted: el.querySelector(".sim-posted span")?.innerText?.trim() || "",
-          href: el.querySelector("h2 a")?.href || "",
-        }));
-    });
-
-    extracted.forEach(({ title, company, experience, location: loc, salary, posted, href }) => {
       if (title && company) {
         jobs.push({
           title,
@@ -40,14 +36,14 @@ async function scrape(role, location) {
           salary: salary || "Not Disclosed",
           source: "TimesJobs",
           postedDate: posted || "Recently",
-          url: href || url,
+          url: href.startsWith("http") ? href : `https://www.timesjobs.com${href}`,
         });
       }
     });
+
+    console.log(`[TimesJobs] ${jobs.length} jobs for "${role}" in "${location}"`);
   } catch (err) {
     console.error(`[TimesJobs] Error for ${role} in ${location}:`, err.message);
-  } finally {
-    if (page) await page.close();
   }
 
   return jobs;

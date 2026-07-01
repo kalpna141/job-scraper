@@ -1,56 +1,79 @@
-const { newPage } = require("../browser");
+const axios = require("axios");
+const cheerio = require("cheerio");
 
 function toSlug(str) {
   return str.trim().toLowerCase().replace(/\s+/g, "-");
 }
 
+const HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+  "Accept-Encoding": "gzip, deflate, br",
+  "Cache-Control": "no-cache",
+  "Referer": "https://www.google.com/",
+};
+
 async function scrape(role, location) {
   const jobs = [];
   const url = `https://www.naukri.com/${toSlug(role)}-jobs-in-${toSlug(location)}`;
-  let page;
 
   try {
-    page = await newPage();
-    await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
+    const { data } = await axios.get(url, { headers: HEADERS, timeout: 15000 });
+    const $ = cheerio.load(data);
 
-    // Wait for job cards to load
-    await page.waitForSelector(".cust-job-tuple, .srp-jobtuple-wrapper, article", {
-      timeout: 10000,
-    }).catch(() => {});
-
-    const extracted = await page.evaluate(() => {
-      const cards = document.querySelectorAll(
-        ".cust-job-tuple, .srp-jobtuple-wrapper, article.jobTuple"
-      );
-      return Array.from(cards).map((el) => ({
-        title: el.querySelector(".title, a.title, .jobTitle")?.innerText?.trim() || "",
-        company: el.querySelector(".comp-name, .companyName")?.innerText?.trim() || "",
-        experience: el.querySelector(".expwdth, .experience, .exp-wrap")?.innerText?.trim() || "",
-        location: el.querySelector(".locWdth, .location, .loc")?.innerText?.trim() || "",
-        salary: el.querySelector(".sal-wrap, .salary, [class*='salary']")?.innerText?.trim() || "",
-        posted: el.querySelector(".job-post-day, .freshness")?.innerText?.trim() || "",
-        href: el.querySelector("a.title, a.jobTitle")?.href || "",
-      }));
-    });
-
-    extracted.forEach(({ title, company, experience, location: loc, salary, posted, href }) => {
-      if (title && company) {
-        jobs.push({
-          title,
-          company,
-          experience: experience || "Not specified",
-          location: loc || location,
-          salary: salary || "Not Disclosed",
-          source: "Naukri",
-          postedDate: posted || "Recently",
-          url: href || url,
+    // Try JSON-LD structured data first (most reliable, used for SEO)
+    $('script[type="application/ld+json"]').each((_, el) => {
+      try {
+        const json = JSON.parse($(el).html());
+        const postings = Array.isArray(json) ? json : [json];
+        postings.forEach((p) => {
+          if (p["@type"] === "JobPosting" && p.title) {
+            jobs.push({
+              title: p.title,
+              company: p.hiringOrganization?.name || "Unknown",
+              experience: "Not specified",
+              location: p.jobLocation?.address?.addressLocality || location,
+              salary: "Not Disclosed",
+              source: "Naukri",
+              postedDate: p.datePosted || "Recently",
+              url: p.url || url,
+            });
+          }
         });
-      }
+      } catch (_) {}
     });
+
+    // HTML fallback
+    if (jobs.length === 0) {
+      $(".cust-job-tuple, .srp-jobtuple-wrapper, article.jobTuple").each((_, el) => {
+        const $el = $(el);
+        const title = $el.find(".title, a.title, .jobTitle").first().text().trim();
+        const company = $el.find(".comp-name, .companyName").first().text().trim();
+        const experience = $el.find(".expwdth, .experience, .exp-wrap").first().text().trim();
+        const loc = $el.find(".locWdth, .location, .loc").first().text().trim();
+        const salary = $el.find(".sal-wrap, .salary").first().text().replace(/\s+/g, " ").trim();
+        const posted = $el.find(".job-post-day, .freshness").first().text().trim();
+        const href = $el.find("a.title, a.jobTitle").first().attr("href") || url;
+
+        if (title && company) {
+          jobs.push({
+            title,
+            company,
+            experience: experience || "Not specified",
+            location: loc || location,
+            salary: salary || "Not Disclosed",
+            source: "Naukri",
+            postedDate: posted || "Recently",
+            url: href.startsWith("http") ? href : `https://www.naukri.com${href}`,
+          });
+        }
+      });
+    }
+
+    console.log(`[Naukri] ${jobs.length} jobs for "${role}" in "${location}"`);
   } catch (err) {
     console.error(`[Naukri] Error for ${role} in ${location}:`, err.message);
-  } finally {
-    if (page) await page.close();
   }
 
   return jobs;

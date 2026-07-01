@@ -6,7 +6,6 @@ const shine = require("./scrapers/shine");
 const timesjobs = require("./scrapers/timesjobs");
 const careerpages = require("./scrapers/careerpages");
 const { ROLES, LOCATIONS } = require("./config");
-const { closeBrowser } = require("./browser");
 
 const app = express();
 app.use(cors());
@@ -38,36 +37,20 @@ app.get("/api/jobs", async (req, res) => {
 
   const allResults = [];
 
-  // Run Puppeteer scrapers sequentially and close browser between each
-  // to stay within Render free tier 512MB memory limit
-  const puppeteerScrapers = [
-    { name: "Naukri", scraper: naukri },
-    { name: "Indeed", scraper: indeed },
-    { name: "Shine", scraper: shine },
-    { name: "TimesJobs", scraper: timesjobs },
-  ];
-
   for (const r of roles) {
     for (const l of locations) {
-      for (const { name, scraper } of puppeteerScrapers) {
-        try {
-          const jobs = await scraper.scrape(r, l);
-          allResults.push(...jobs);
-          console.log(`[${name}] ${jobs.length} jobs found`);
-        } catch (err) {
-          console.error(`[${name}] failed:`, err.message);
-        } finally {
-          await closeBrowser(); // free Chrome memory after each site
-        }
-      }
+      const [naukriJobs, indeedJobs, shineJobs, timesjobsJobs, careerJobs] =
+        await Promise.allSettled([
+          naukri.scrape(r, l),
+          indeed.scrape(r, l),
+          shine.scrape(r, l),
+          timesjobs.scrape(r, l),
+          careerpages.scrape(r, l),
+        ]);
 
-      // CareerPages uses HTTP APIs (no Chrome) — run normally
-      try {
-        const jobs = await careerpages.scrape(r, l);
-        allResults.push(...jobs);
-      } catch (err) {
-        console.error(`[CareerPages] failed:`, err.message);
-      }
+      [naukriJobs, indeedJobs, shineJobs, timesjobsJobs, careerJobs].forEach((result) => {
+        if (result.status === "fulfilled") allResults.push(...result.value);
+      });
     }
   }
 
@@ -75,6 +58,7 @@ app.get("/api/jobs", async (req, res) => {
   console.log(`[Server] Found ${deduplicated.length} unique jobs`);
   res.json({ jobs: deduplicated, total: deduplicated.length });
 });
+
 
 app.get("/api/config", (req, res) => {
   res.json({ roles: ROLES, locations: LOCATIONS });
@@ -85,11 +69,5 @@ app.listen(PORT, () =>
   console.log(`Job scraper backend running on http://localhost:${PORT}`),
 );
 
-process.on("SIGINT", async () => {
-  await closeBrowser();
-  process.exit(0);
-});
-process.on("SIGTERM", async () => {
-  await closeBrowser();
-  process.exit(0);
-});
+process.on("SIGINT", () => process.exit(0));
+process.on("SIGTERM", () => process.exit(0));

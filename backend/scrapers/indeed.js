@@ -1,51 +1,74 @@
-const { newPage } = require("../browser");
+const axios = require("axios");
+const cheerio = require("cheerio");
+
+const HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+  "Accept-Encoding": "gzip, deflate, br",
+  "Referer": "https://www.google.com/",
+};
 
 async function scrape(role, location) {
   const jobs = [];
-  const url = `https://in.indeed.com/jobs?q=${encodeURIComponent(role)}&l=${encodeURIComponent(location)}`;
-  let page;
+  const url = `https://in.indeed.com/jobs?q=${encodeURIComponent(role)}&l=${encodeURIComponent(location)}&fromage=30`;
 
   try {
-    page = await newPage();
-    await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
+    const { data } = await axios.get(url, { headers: HEADERS, timeout: 15000 });
+    const $ = cheerio.load(data);
 
-    await page.waitForSelector(".job_seen_beacon", { timeout: 10000 }).catch(() => {});
-
-    const extracted = await page.evaluate(() => {
-      const cards = document.querySelectorAll(".job_seen_beacon");
-      return Array.from(cards).map((el) => {
-        const titleSpan = el.querySelector("h3.jobTitle span[title], h3.jobTitle span[id]");
-        const linkEl = el.querySelector("h3.jobTitle a");
-        const href = linkEl?.getAttribute("href") || "";
-        return {
-          title: titleSpan?.getAttribute("title") || titleSpan?.innerText?.trim() || "",
-          company: el.querySelector("[data-testid='company-name']")?.innerText?.trim() || "",
-          location: el.querySelector("[data-testid='text-location']")?.innerText?.trim() || "",
-          salary: el.querySelector(".salary-snippet, [data-testid='attribute_snippet_testid'], .estimated-salary")?.innerText?.trim() || "",
-          posted: el.querySelector(".date, [data-testid='myJobsStateDate']")?.innerText?.trim() || "",
-          href: href.startsWith("http") ? href : `https://in.indeed.com${href}`,
-        };
-      });
-    });
-
-    extracted.forEach(({ title, company, location: loc, salary, posted, href }) => {
-      if (title && company) {
-        jobs.push({
-          title,
-          company,
-          experience: "Not specified",
-          location: loc || location,
-          salary: salary || "Not Disclosed",
-          source: "Indeed",
-          postedDate: posted || "Recently",
-          url: href || url,
+    // JSON-LD first
+    $('script[type="application/ld+json"]').each((_, el) => {
+      try {
+        const json = JSON.parse($(el).html());
+        const postings = Array.isArray(json) ? json : [json];
+        postings.forEach((p) => {
+          if (p["@type"] === "JobPosting" && p.title) {
+            jobs.push({
+              title: p.title,
+              company: p.hiringOrganization?.name || "Unknown",
+              experience: "Not specified",
+              location: p.jobLocation?.address?.addressLocality || location,
+              salary: "Not Disclosed",
+              source: "Indeed",
+              postedDate: p.datePosted || "Recently",
+              url: p.url || url,
+            });
+          }
         });
-      }
+      } catch (_) {}
     });
+
+    // HTML fallback
+    if (jobs.length === 0) {
+      $(".job_seen_beacon, .tapItem").each((_, el) => {
+        const $el = $(el);
+        const titleEl = $el.find("h2.jobTitle span");
+        const title = titleEl.attr("title") || titleEl.text().trim();
+        const company = $el.find("[data-testid='company-name'], .companyName").first().text().trim();
+        const loc = $el.find("[data-testid='text-location'], .companyLocation").first().text().trim();
+        const salary = $el.find(".salary-snippet, .estimated-salary").first().text().trim();
+        const posted = $el.find(".date, [data-testid='myJobsStateDate']").first().text().trim();
+        const href = $el.find("h2.jobTitle a").first().attr("href") || "";
+
+        if (title && company) {
+          jobs.push({
+            title,
+            company,
+            experience: "Not specified",
+            location: loc || location,
+            salary: salary || "Not Disclosed",
+            source: "Indeed",
+            postedDate: posted || "Recently",
+            url: href.startsWith("http") ? href : `https://in.indeed.com${href}`,
+          });
+        }
+      });
+    }
+
+    console.log(`[Indeed] ${jobs.length} jobs for "${role}" in "${location}"`);
   } catch (err) {
     console.error(`[Indeed] Error for ${role} in ${location}:`, err.message);
-  } finally {
-    if (page) await page.close();
   }
 
   return jobs;
