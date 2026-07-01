@@ -47,18 +47,15 @@ app.get("/api/jobs", async (req, res) => {
 
     for (const r of roles) {
       for (const l of locations) {
-        // Phase 1: Naukri + Indeed
-        const phase1 = await Promise.allSettled([naukri.scrape(r, l), indeed.scrape(r, l)]);
-        if (global.gc) global.gc();
+        const results = await Promise.allSettled([
+          naukri.scrape(r, l),
+          indeed.scrape(r, l),
+          shine.scrape(r, l),
+          timesjobs.scrape(r, l),
+          careerpages.scrape(r, l),
+        ]);
 
-        // Phase 2: Shine + TimesJobs
-        const phase2 = await Promise.allSettled([shine.scrape(r, l), timesjobs.scrape(r, l)]);
-        if (global.gc) global.gc();
-
-        // Phase 3: CareerPages (many API calls — run alone so phase 1+2 memory is freed)
-        const phase3 = await Promise.allSettled([careerpages.scrape(r, l)]);
-
-        [...phase1, ...phase2, ...phase3].forEach((result) => {
+        results.forEach((result) => {
           if (result.status === "fulfilled") allResults.push(...result.value);
         });
       }

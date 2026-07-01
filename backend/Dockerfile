@@ -6,4 +6,4 @@ RUN npm install --omit=dev
 COPY . .
 
 EXPOSE 6000
-CMD ["node", "--expose-gc", "server.js"]
+CMD ["node", "server.js"]
