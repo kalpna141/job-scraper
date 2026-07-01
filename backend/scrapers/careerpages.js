@@ -1,7 +1,6 @@
 const { COMPANIES } = require("../data/companies");
-const { sleep } = require("../config");
 
-const BATCH_SIZE = 8;
+const BATCH_SIZE = 3;
 const FETCH_TIMEOUT_MS = 12000;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -29,7 +28,7 @@ function fetchWithTimeout(url, options = {}) {
 // ── Greenhouse ────────────────────────────────────────────────────────────────
 
 async function scrapeGreenhouse(company, role, location) {
-  const url = `https://boards-api.greenhouse.io/v1/boards/${company.slug}/jobs?content=true`;
+  const url = `https://boards-api.greenhouse.io/v1/boards/${company.slug}/jobs`;
   const res = await fetchWithTimeout(url);
   if (!res.ok) return [];
   const data = await res.json();

@@ -11,6 +11,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+process.on("unhandledRejection", (reason) => {
+  console.error("[Server] Unhandled rejection:", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[Server] Uncaught exception:", err);
+});
+
 function deduplicateJobs(jobs) {
   const seen = new Set();
   return jobs.filter((job) => {
@@ -22,41 +29,46 @@ function deduplicateJobs(jobs) {
 }
 
 app.get("/api/jobs", async (req, res) => {
-  const { role, location } = req.query;
+  try {
+    const { role, location } = req.query;
 
-  if (!role || !location) {
-    return res.status(400).json({ error: "role and location are required" });
-  }
-
-  const locations = location === "all" ? LOCATIONS : [location];
-  const roles = role === "all" ? ROLES : [role];
-
-  console.log(
-    `[Server] Searching: roles=${roles.join(", ")} | locations=${locations.join(", ")}`,
-  );
-
-  const allResults = [];
-
-  for (const r of roles) {
-    for (const l of locations) {
-      const [naukriJobs, indeedJobs, shineJobs, timesjobsJobs, careerJobs] =
-        await Promise.allSettled([
-          naukri.scrape(r, l),
-          indeed.scrape(r, l),
-          shine.scrape(r, l),
-          timesjobs.scrape(r, l),
-          careerpages.scrape(r, l),
-        ]);
-
-      [naukriJobs, indeedJobs, shineJobs, timesjobsJobs, careerJobs].forEach((result) => {
-        if (result.status === "fulfilled") allResults.push(...result.value);
-      });
+    if (!role || !location) {
+      return res.status(400).json({ error: "role and location are required" });
     }
-  }
 
-  const deduplicated = deduplicateJobs(allResults);
-  console.log(`[Server] Found ${deduplicated.length} unique jobs`);
-  res.json({ jobs: deduplicated, total: deduplicated.length });
+    const locations = location === "all" ? LOCATIONS : [location];
+    const roles = role === "all" ? ROLES : [role];
+
+    console.log(
+      `[Server] Searching: roles=${roles.join(", ")} | locations=${locations.join(", ")}`,
+    );
+
+    const allResults = [];
+
+    for (const r of roles) {
+      for (const l of locations) {
+        const [naukriJobs, indeedJobs, shineJobs, timesjobsJobs, careerJobs] =
+          await Promise.allSettled([
+            naukri.scrape(r, l),
+            indeed.scrape(r, l),
+            shine.scrape(r, l),
+            timesjobs.scrape(r, l),
+            careerpages.scrape(r, l),
+          ]);
+
+        [naukriJobs, indeedJobs, shineJobs, timesjobsJobs, careerJobs].forEach((result) => {
+          if (result.status === "fulfilled") allResults.push(...result.value);
+        });
+      }
+    }
+
+    const deduplicated = deduplicateJobs(allResults);
+    console.log(`[Server] Found ${deduplicated.length} unique jobs`);
+    res.json({ jobs: deduplicated, total: deduplicated.length });
+  } catch (err) {
+    console.error("[Server] /api/jobs error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 
