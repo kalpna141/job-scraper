@@ -1,4 +1,3 @@
-const { newPage } = require("../browser");
 const { COMPANIES } = require("../data/companies");
 const { sleep } = require("../config");
 
@@ -127,51 +126,9 @@ async function scrapeWorkday(company, role, location) {
 
 // ── Custom (Puppeteer) ────────────────────────────────────────────────────────
 
-async function scrapeCustom(company, role, location) {
-  let page;
-  try {
-    const url = (company.searchUrl || company.careersUrl)
-      .replace("{role}", encodeURIComponent(role))
-      .replace("{location}", encodeURIComponent(location));
-
-    page = await newPage();
-    await page.goto(url, { waitUntil: "networkidle2", timeout: 25000 });
-
-    if (company.selector) {
-      await page.waitForSelector(company.selector, { timeout: 8000 }).catch(() => {});
-    }
-
-    const rawJobs = await page.evaluate((cfg) => {
-      const cards = document.querySelectorAll(cfg.selector || ".job, .position, .opening, li[data-job]");
-      return Array.from(cards).slice(0, 30).map((el) => ({
-        title: cfg.titleSel
-          ? el.querySelector(cfg.titleSel)?.innerText?.trim()
-          : el.querySelector("h2,h3,h4,a")?.innerText?.trim(),
-        location: cfg.locationSel
-          ? el.querySelector(cfg.locationSel)?.innerText?.trim()
-          : el.querySelector(".location,.city,.place")?.innerText?.trim(),
-        href: el.querySelector("a")?.href || "",
-      }));
-    }, company);
-
-    return rawJobs
-      .filter((j) => j.title && matchesRole(j.title, role))
-      .filter((j) => matchesLocation(j.location, location))
-      .map((j) => ({
-        title: j.title,
-        company: company.name,
-        experience: "N/A",
-        location: j.location || location,
-        source: "Career Pages",
-        postedDate: "Recently",
-        url: j.href || company.careersUrl || company.searchUrl,
-      }));
-  } catch (err) {
-    console.error(`[CareerPages] Custom scrape failed for ${company.name}:`, err.message);
-    return [];
-  } finally {
-    if (page) await page.close();
-  }
+// Custom (browser-based) scraping disabled — no Puppeteer on free hosting
+async function scrapeCustom(company) {
+  return [];
 }
 
 // ── Dispatcher ────────────────────────────────────────────────────────────────
