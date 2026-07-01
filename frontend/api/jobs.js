@@ -33,19 +33,28 @@ module.exports = async (req, res) => {
   const allResults = [];
 
   for (const r of roles) {
+    // Career pages searched once per role with the original location param.
+    // Passing "all" lets matchesLocation include every job regardless of city.
+    // Passing a specific city keeps the filter tight.
+    const careerPromise = careerpages.scrape(r, location);
+
     for (const l of locations) {
-      const results = await Promise.allSettled([
+      const [naukriR, indeedR, shineR, timesjobsR] = await Promise.allSettled([
         naukri.scrape(r, l),
         indeed.scrape(r, l),
         shine.scrape(r, l),
         timesjobs.scrape(r, l),
-        careerpages.scrape(r, l),
       ]);
-
-      results.forEach((result) => {
+      [naukriR, indeedR, shineR, timesjobsR].forEach((result) => {
         if (result.status === "fulfilled") allResults.push(...result.value);
       });
     }
+
+    // Await career pages after the HTML scrapers finish
+    try {
+      const careerJobs = await careerPromise;
+      allResults.push(...careerJobs);
+    } catch (_) {}
   }
 
   const deduplicated = deduplicateJobs(allResults);

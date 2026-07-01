@@ -6,15 +6,32 @@ const TIMEOUT_MS = 5000;
 const MAX_BYTES = 1 * 1024 * 1024;
 const MAX_JOBS_PER_COMPANY = 15;
 
+// Expanded keywords so "mern stack developer" also matches "full stack engineer",
+// "software developer", etc. — companies rarely title positions "MERN Stack Developer".
+const ROLE_KEYWORDS = {
+  "mern stack developer": ["mern", "full stack", "fullstack", "full-stack", "react", "node", "javascript", "software engineer", "software developer", "web developer", "frontend", "backend"],
+  "react developer":      ["react", "reactjs", "frontend", "front-end", "javascript", "ui developer", "web developer", "software engineer"],
+  "nodejs developer":     ["node", "nodejs", "node.js", "backend", "back-end", "express", "javascript", "api developer", "software engineer"],
+  "quality analyst":      ["quality", "qa ", " qa", "qe ", " qe", "test", "automation", "sdet", "quality assurance", "quality engineer", "software tester"],
+};
+
+function getKeywords(role) {
+  const key = role.toLowerCase();
+  return ROLE_KEYWORDS[key] || key.split(/\s+/).filter((w) => w.length > 2);
+}
+
 function matchesRole(title, role) {
   const t = title.toLowerCase();
-  return role.toLowerCase().split(/\s+/).filter((w) => w.length > 2).some((kw) => t.includes(kw));
+  return getKeywords(role).some((kw) => t.includes(kw));
 }
 
 function matchesLocation(loc, location) {
   if (!location || location === "all") return true;
-  if (!loc) return false;
-  return loc.toLowerCase().includes(location.toLowerCase());
+  if (!loc) return true;
+  const locLower = loc.toLowerCase();
+  // Remote and India-wide jobs are relevant for every city search
+  if (locLower.includes("remote") || locLower.includes("india") || locLower.includes("anywhere")) return true;
+  return locLower.includes(location.toLowerCase());
 }
 
 async function scrapeGreenhouse(company, role, location) {
@@ -97,7 +114,7 @@ async function scrapeCompany(company, role, location) {
 }
 
 async function scrape(role, location) {
-  console.log(`[CareerPages] Searching ${COMPANIES.length} companies`);
+  console.log(`[CareerPages] Searching ${COMPANIES.length} companies for "${role}"`);
   const allJobs = [];
 
   for (let i = 0; i < COMPANIES.length; i += BATCH_SIZE) {
