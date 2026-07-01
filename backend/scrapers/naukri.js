@@ -19,7 +19,7 @@ async function scrape(role, location) {
   const url = `https://www.naukri.com/${toSlug(role)}-jobs-in-${toSlug(location)}`;
 
   try {
-    const { data } = await axios.get(url, { headers: HEADERS, timeout: 15000 });
+    const { data } = await axios.get(url, { headers: HEADERS, timeout: 15000, maxContentLength: 3 * 1024 * 1024 });
     const $ = cheerio.load(data);
 
     // Try JSON-LD structured data first (most reliable, used for SEO)

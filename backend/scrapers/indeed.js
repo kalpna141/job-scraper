@@ -14,7 +14,7 @@ async function scrape(role, location) {
   const url = `https://in.indeed.com/jobs?q=${encodeURIComponent(role)}&l=${encodeURIComponent(location)}&fromage=30`;
 
   try {
-    const { data } = await axios.get(url, { headers: HEADERS, timeout: 15000 });
+    const { data } = await axios.get(url, { headers: HEADERS, timeout: 15000, maxContentLength: 3 * 1024 * 1024 });
     const $ = cheerio.load(data);
 
     // JSON-LD first

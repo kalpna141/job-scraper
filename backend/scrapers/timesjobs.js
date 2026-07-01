@@ -14,7 +14,7 @@ async function scrape(role, location) {
   const url = `https://www.timesjobs.com/candidate/job-search.html?searchType=personalizedSearch&from=submit&txtKeywords=${encodeURIComponent(role)}&txtLocation=${encodeURIComponent(location)}`;
 
   try {
-    const { data } = await axios.get(url, { headers: HEADERS, timeout: 15000 });
+    const { data } = await axios.get(url, { headers: HEADERS, timeout: 15000, maxContentLength: 3 * 1024 * 1024 });
     const $ = cheerio.load(data);
 
     $("li.clearfix").filter((_, el) => $(el).find("h2").length > 0).each((_, el) => {
