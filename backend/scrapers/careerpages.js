@@ -1,14 +1,14 @@
+const axios = require("axios");
 const { COMPANIES } = require("../data/companies");
 
 const BATCH_SIZE = 3;
-const FETCH_TIMEOUT_MS = 12000;
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
+const TIMEOUT_MS = 10000;
+const MAX_BYTES = 1 * 1024 * 1024; // 1 MB per API call — prevents buffering huge responses
+const MAX_JOBS_PER_COMPANY = 20;
 
 function matchesRole(title, role) {
   const t = title.toLowerCase();
-  const keywords = role.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
-  return keywords.some((kw) => t.includes(kw));
+  return role.toLowerCase().split(/\s+/).filter((w) => w.length > 2).some((kw) => t.includes(kw));
 }
 
 function matchesLocation(loc, location) {
@@ -17,25 +17,14 @@ function matchesLocation(loc, location) {
   return loc.toLowerCase().includes(location.toLowerCase());
 }
 
-function fetchWithTimeout(url, options = {}) {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  return fetch(url, { ...options, signal: controller.signal }).finally(() =>
-    clearTimeout(id)
-  );
-}
-
 // ── Greenhouse ────────────────────────────────────────────────────────────────
 
 async function scrapeGreenhouse(company, role, location) {
   const url = `https://boards-api.greenhouse.io/v1/boards/${company.slug}/jobs`;
-  const res = await fetchWithTimeout(url);
-  if (!res.ok) return [];
-  const data = await res.json();
-  const jobs = data.jobs || [];
-
-  return jobs
+  const { data } = await axios.get(url, { timeout: TIMEOUT_MS, maxContentLength: MAX_BYTES });
+  return (data.jobs || [])
     .filter((j) => matchesRole(j.title, role) && matchesLocation(j.location?.name, location))
+    .slice(0, MAX_JOBS_PER_COMPANY)
     .map((j) => ({
       title: j.title,
       company: company.name,
@@ -50,83 +39,59 @@ async function scrapeGreenhouse(company, role, location) {
 // ── Lever ─────────────────────────────────────────────────────────────────────
 
 async function scrapeLever(company, role, location) {
-  const url = `https://api.lever.co/v0/postings/${company.slug}?mode=json&limit=250`;
-  const res = await fetchWithTimeout(url);
-  if (!res.ok) return [];
-  const jobs = await res.json();
-
-  return jobs
-    .filter(
-      (j) =>
-        matchesRole(j.text, role) &&
-        matchesLocation(j.categories?.location || j.workplaceType, location)
-    )
+  const url = `https://api.lever.co/v0/postings/${company.slug}?mode=json&limit=20`;
+  const { data } = await axios.get(url, { timeout: TIMEOUT_MS, maxContentLength: MAX_BYTES });
+  return (Array.isArray(data) ? data : [])
+    .filter((j) => matchesRole(j.text, role) && matchesLocation(j.categories?.location, location))
+    .slice(0, MAX_JOBS_PER_COMPANY)
     .map((j) => ({
       title: j.text,
       company: company.name,
       experience: "N/A",
-      location: j.categories?.location || j.workplaceType || location,
+      location: j.categories?.location || location,
       source: "Career Pages",
-      postedDate: j.createdAt
-        ? new Date(j.createdAt).toLocaleDateString("en-IN")
-        : "Recently",
+      postedDate: j.createdAt ? new Date(j.createdAt).toLocaleDateString("en-IN") : "Recently",
       url: j.hostedUrl || `https://jobs.lever.co/${company.slug}`,
     }));
 }
 
 // ── Workday ───────────────────────────────────────────────────────────────────
 
-// Workday tenants expose a search API but the exact subdomain varies.
-// We try the two most common URL patterns.
 const WORKDAY_PATTERNS = [
-  (tenant) => `https://${tenant}.wd5.myworkdayjobs.com/wday/cxs/${tenant}/External_Careers/jobs`,
-  (tenant) => `https://${tenant}.wd3.myworkdayjobs.com/wday/cxs/${tenant}/Careers/jobs`,
+  (t) => `https://${t}.wd5.myworkdayjobs.com/wday/cxs/${t}/External_Careers/jobs`,
+  (t) => `https://${t}.wd3.myworkdayjobs.com/wday/cxs/${t}/Careers/jobs`,
 ];
 
 async function scrapeWorkday(company, role, location) {
-  const body = JSON.stringify({
-    appliedFacets: {},
-    limit: 20,
-    offset: 0,
-    searchText: role,
-  });
-
+  const body = JSON.stringify({ appliedFacets: {}, limit: 20, offset: 0, searchText: role });
   for (const pattern of WORKDAY_PATTERNS) {
     try {
-      const url = pattern(company.tenant);
-      const res = await fetchWithTimeout(url, {
-        method: "POST",
+      const { data } = await axios.post(pattern(company.tenant), body, {
         headers: { "Content-Type": "application/json" },
-        body,
+        timeout: TIMEOUT_MS,
+        maxContentLength: MAX_BYTES,
       });
-      if (!res.ok) continue;
-      const data = await res.json();
-      const jobs = data.jobPostings || [];
-
-      return jobs
-        .filter((j) => matchesLocation(j.locationsText, location))
-        .map((j) => ({
-          title: j.title,
-          company: company.name,
-          experience: "N/A",
-          location: j.locationsText || location,
-          source: "Career Pages",
-          postedDate: j.postedOn || "Recently",
-          url: j.externalPath
-            ? `https://${company.tenant}.wd5.myworkdayjobs.com${j.externalPath}`
-            : `https://${company.tenant}.wd5.myworkdayjobs.com`,
-        }));
-    } catch (_) {
-      // try next pattern
-    }
+      const jobs = (data.jobPostings || []).filter((j) => matchesLocation(j.locationsText, location));
+      if (jobs.length === 0 && data.jobPostings) return [];
+      return jobs.slice(0, MAX_JOBS_PER_COMPANY).map((j) => ({
+        title: j.title,
+        company: company.name,
+        experience: "N/A",
+        location: j.locationsText || location,
+        source: "Career Pages",
+        postedDate: j.postedOn || "Recently",
+        url: j.externalPath
+          ? `https://${company.tenant}.wd5.myworkdayjobs.com${j.externalPath}`
+          : `https://${company.tenant}.wd5.myworkdayjobs.com`,
+      }));
+    } catch (_) {}
   }
   return [];
 }
 
-// ── Custom (Puppeteer) ────────────────────────────────────────────────────────
+// ── Custom ────────────────────────────────────────────────────────────────────
 
-// Custom (browser-based) scraping disabled — no Puppeteer on free hosting
-async function scrapeCustom(company) {
+async function scrapeCustom() {
   return [];
 }
 
@@ -150,15 +115,12 @@ async function scrapeCompany(company, role, location) {
 // ── Main export ───────────────────────────────────────────────────────────────
 
 async function scrape(role, location) {
-  console.log(`[CareerPages] Searching ${COMPANIES.length} company pages for "${role}" in "${location}"`);
+  console.log(`[CareerPages] Searching ${COMPANIES.length} companies for "${role}" in "${location}"`);
   const allJobs = [];
 
-  // Process in batches to avoid hammering all APIs simultaneously
   for (let i = 0; i < COMPANIES.length; i += BATCH_SIZE) {
     const batch = COMPANIES.slice(i, i + BATCH_SIZE);
-    const results = await Promise.allSettled(
-      batch.map((company) => scrapeCompany(company, role, location))
-    );
+    const results = await Promise.allSettled(batch.map((c) => scrapeCompany(c, role, location)));
     results.forEach((r) => {
       if (r.status === "fulfilled") allJobs.push(...r.value);
     });
